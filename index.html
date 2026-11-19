@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Los Santos V - Authentic GTA 5 Edition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Chakra+Petch:ital,wght@0,600;0,700;1,700&family=Oswald:wght@500;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100dvh;
+            overflow: hidden;
+            background-color: #070b14;
+            font-family: 'Inter', sans-serif;
+        }
+        canvas#gameCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            transition: filter 0.35s ease;
+        }
+        .gta-pricedown {
+            font-family: 'Anton', sans-serif;
+            letter-spacing: 0.03em;
+        }
+        .gta-street {
+            font-family: 'Oswald', sans-serif;
+            letter-spacing: 0.05em;
+        }
+        .gta-tech {
+            font-family: 'Chakra Petch', sans-serif;
+        }
+        .text-outline-gta {
+            text-shadow:
+                2px 2px 0px #000,
+               -2px -2px 0px #000,
+                2px -2px 0px #000,
+               -2px 2px 0px #000,
+                0px 4px 14px rgba(0, 0, 0, 0.95);
+        }
+        .star-active {
+            color: #ffffff;
+            filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.95));
+            animation: wantedBlink 0.55s infinite alternate;
+        }
+        .star-inactive {
+            color: rgba(255, 255, 255, 0.18);
+        }
+        @keyframes wantedBlink {
+            0% { color: #ffffff; transform: scale(1); }
+            50% { color: #38bdf8; transform: scale(1.12); }
+            100% { color: #ef4444; transform: scale(1.12); }
+        }
+        @keyframes gtaBannerSlide {
+            0% { opacity: 0; transform: scaleY(0.2); }
+            12% { opacity: 1; transform: scaleY(1); }
+            88% { opacity: 1; transform: scaleY(1); }
+            100% { opacity: 0; transform: scaleY(0.8); }
+        }
+        .gta-full-banner {
+            animation: gtaBannerSlide 3.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .wasted-filter {
+            filter: grayscale(92%) contrast(135%) brightness(75%);
+        }
+        .snapmatic-filter {
+            filter: sepia(35%) saturate(155%) contrast(115%);
+        }
+        .special-vignette-michael {
+            box-shadow: inset 0 0 115px rgba(56, 189, 248, 0.68);
+        }
+        .special-vignette-franklin {
+            box-shadow: inset 0 0 115px rgba(74, 222, 128, 0.68);
+        }
+        .special-vignette-trevor {
+            box-shadow: inset 0 0 125px rgba(249, 115, 22, 0.78);
+        }
+        .gta-radar-box {
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.92), inset 0 0 0 2px rgba(255, 255, 255, 0.16);
+        }
+    </style>
+</head>
+<body class="relative text-white">
+
+    <!-- Spezialfähigkeits-Vignette -->
+    <div id="specialOverlay" class="fixed inset-0 pointer-events-none z-10 transition-all duration-300"></div>
+
+    <!-- 3D WebGL Canvas -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- GTA 5 Fadenkreuz -->
+    <div id="crosshair" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none hidden z-20">
+        <div id="crosshairDot" class="w-1.5 h-1.5 bg-white rounded-full shadow-[0_0_4px_#000] transition-transform duration-75"></div>
+        <div id="hitX" class="absolute -inset-2 text-red-500 font-extrabold text-xs flex items-center justify-center opacity-0 transition-opacity duration-75">✕</div>
+    </div>
+
+    <!-- Radio-Sender Einblendung -->
+    <div id="radioBanner" class="fixed top-14 left-1/2 -translate-x-1/2 bg-black/85 backdrop-blur-md border border-white/20 px-5 py-2 rounded-full flex items-center gap-3 pointer-events-none hidden z-20 shadow-2xl">
+        <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-500 to-rose-500 flex items-center justify-center text-sm shadow">📻</div>
+        <div>
+            <div class="text-[9px] uppercase tracking-widest text-gray-400 font-bold">Los Santos Radio [R]</div>
+            <div id="radioStationName" class="gta-street text-base font-bold text-amber-400 uppercase">Radio Los Santos</div>
+        </div>
+    </div>
+
+    <!-- GTA 5 Interaktions-Hinweis Oben Links -->
+    <div id="actionPrompt" class="fixed top-4 left-4 bg-black/85 border-l-4 border-white px-4 py-2.5 rounded-r-lg text-xs md:text-sm font-medium tracking-wide hidden z-20 shadow-2xl max-w-xs">
+        Drücke <span class="bg-white text-black px-1.5 py-0.5 rounded font-bold mx-1">E</span> um einzusteigen.
+    </div>
+
+    <!-- WASTED / MISSION PASSED OVERLAY -->
+    <div id="eventBanner" class="fixed inset-0 flex items-center justify-center pointer-events-none z-40 hidden">
+        <div class="w-full bg-gradient-to-r from-transparent via-black/90 to-transparent py-7 md:py-10 border-y border-white/15 text-center gta-full-banner">
+            <h1 id="bannerTitle" class="gta-pricedown text-6xl md:text-8xl uppercase tracking-wider text-outline-gta text-red-500">WASTED</h1>
+            <p id="bannerSub" class="gta-street text-lg md:text-2xl uppercase tracking-widest text-gray-200 mt-1">Du wurdest ausgeschaltet</p>
+        </div>
+    </div>
+
+    <!-- HUD: Oben Rechts -->
+    <div id="hudTopRight" class="fixed top-3 right-3 flex flex-col items-end gap-1 pointer-events-none z-20">
+        <div id="wantedStars" class="flex gap-1 text-2xl md:text-3xl tracking-tight">
+            <span class="star-inactive">★</span>
+            <span class="star-inactive">★</span>
+            <span class="star-inactive">★</span>
+            <span class="star-inactive">★</span>
+            <span class="star-inactive">★</span>
+        </div>
+
+        <div id="moneyDisplay" class="gta-pricedown text-3xl md:text-4xl text-emerald-400 text-outline-gta leading-none">
+            $2.500
+        </div>
+
+        <div class="flex items-center gap-2 mt-1">
+            <button id="hudPhoneBtn" title="iFruit Smartphone [T]" class="pointer-events-auto bg-black/75 hover:bg-black/95 border border-white/20 rounded-xl p-2 text-base shadow-lg transition">
+                📱
+            </button>
+            <button id="hudWeaponBtn" class="pointer-events-auto bg-black/75 hover:bg-black/90 backdrop-blur-md border border-white/15 rounded-xl px-3 py-1.5 flex items-center gap-2.5 shadow-lg transition">
+                <div id="weaponIcon" class="text-xl">✊</div>
+                <div class="text-right">
+                    <div id="weaponName" class="gta-street text-xs uppercase text-gray-300 font-bold">Faust [Tab]</div>
+                    <div id="weaponAmmo" class="gta-tech text-xs font-bold text-white">UNBEGRENZT</div>
+                </div>
+            </button>
+        </div>
+    </div>
+
+    <!-- HUD: Oben Mitte (Aktive Mission) -->
+    <div id="missionTracker" class="fixed top-3 left-1/2 -translate-x-1/2 bg-black/80 backdrop-blur-md border-b-2 border-amber-400 px-5 py-2 rounded-xl text-center pointer-events-none z-20 hidden shadow-xl max-w-md w-11/12">
+        <div class="text-[10px] uppercase tracking-widest text-amber-400 font-bold">Aktive Mission</div>
+        <div id="missionTitle" class="gta-street uppercase font-bold text-base text-white">Kurierfahrt zum Hafen</div>
+        <div class="text-xs text-gray-300 mt-0.5">Folge der gelben GPS-Route! Zeit: <span id="missionTimer" class="text-amber-300 font-bold">45s</span></div>
+    </div>
+
+    <!-- HUD: Unten Links (GPS-Radar + Leben / Panzerung / Spezialfähigkeit) -->
+    <div id="hudBottomLeft" class="fixed bottom-3 left-3 flex flex-col pointer-events-none z-20">
+        <div class="gta-radar-box relative w-44 h-32 md:w-56 md:h-40 rounded-t-2xl overflow-hidden bg-slate-950 border-x-2 border-t-2 border-black">
+            <canvas id="minimapCanvas" width="240" height="175" class="w-full h-full block"></canvas>
+            <div class="absolute top-1.5 left-1/2 -translate-x-1/2 bg-black/90 text-[9px] font-extrabold px-1.5 rounded text-white border border-white/30">N</div>
+            <div id="timeDisplay" class="absolute bottom-1.5 right-2 bg-black/75 px-1.5 py-0.5 rounded text-[10px] font-bold text-gray-200">17:45</div>
+        </div>
+        <div class="w-44 md:w-56 grid grid-cols-12 gap-1 bg-black p-1.5 rounded-b-xl border-x-2 border-b-2 border-black shadow-2xl">
+            <div class="col-span-6 h-2 bg-emerald-950 overflow-hidden rounded-sm">
+                <div id="healthBar" class="h-full bg-emerald-500 transition-all duration-150" style="width: 100%;"></div>
+            </div>
+            <div class="col-span-3 h-2 bg-sky-950 overflow-hidden rounded-sm">
+                <div id="armorBar" class="h-full bg-sky-400 transition-all duration-150" style="width: 100%;"></div>
+            </div>
+            <div class="col-span-3 h-2 bg-amber-950 overflow-hidden rounded-sm">
+                <div id="specialBar" class="h-full bg-amber-400 transition-all duration-150" style="width: 100%;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- HUD: Unten Rechts (Straßenname, Stadtteil, Fahrzeug & Charakter-Button) -->
+    <div id="hudBottomRight" class="fixed bottom-3 right-3 flex flex-col items-end pointer-events-none z-20">
+        <div id="vehicleHud" class="hidden mb-1 bg-black/70 backdrop-blur-sm border border-white/15 rounded-xl px-3 py-1.5 text-right">
+            <div class="flex items-baseline justify-end gap-1">
+                <span id="speedDisplay" class="gta-pricedown text-3xl text-white">0</span>
+                <span class="text-[10px] font-bold text-gray-400">KM/H</span>
+            </div>
+        </div>
+
+        <div id="vehicleNameBanner" class="gta-street uppercase text-base md:text-lg font-bold text-amber-400 text-outline-gta hidden">
+            Obey Tailgater – Limousine
+        </div>
+        <div id="streetNameDisplay" class="gta-street uppercase text-xl md:text-2xl font-bold text-white text-outline-gta leading-tight">
+            VESPUCCI BOULEVARD
+        </div>
+        <div id="districtNameDisplay" class="gta-street uppercase text-sm md:text-base font-medium text-gray-300 text-outline-gta leading-tight">
+            DOWNTOWN LOS SANTOS
+        </div>
+
+        <button id="hudCharBtn" class="pointer-events-auto mt-2 bg-black/80 hover:bg-black border border-white/25 rounded-full pl-1.5 pr-3 py-1 flex items-center gap-2 shadow-xl transition">
+            <span id="charAvatarHud" class="w-6 h-6 rounded-full bg-sky-500 flex items-center justify-center text-xs font-bold text-black">M</span>
+            <span id="charNameHud" class="gta-street uppercase text-xs font-bold text-white">MICHAEL</span>
+            <span class="text-[10px] text-gray-400">[C]</span>
+        </button>
+    </div>
+
+    <!-- iFRUIT SMARTPHONE OVERLAY (Taste T) -->
+    <div id="ifruitPhone" class="fixed bottom-24 right-4 w-64 bg-slate-900 border-4 border-slate-700 rounded-[2rem] p-3.5 shadow-2xl z-30 hidden">
+        <div class="w-12 h-1 bg-slate-600 rounded-full mx-auto mb-2"></div>
+        <div class="bg-gradient-to-b from-sky-500 via-indigo-600 to-purple-800 rounded-2xl p-3 text-white shadow-inner">
+            <div class="flex justify-between items-center text-[10px] font-bold opacity-90 mb-3">
+                <span>iFruit 9iX</span>
+                <span id="phoneClock">17:45</span>
+                <span>5G 🔋</span>
+            </div>
+            <div class="grid grid-cols-3 gap-2.5 text-center my-2">
+                <button onclick="phoneQuickMission()" class="flex flex-col items-center gap-1 group">
+                    <div class="w-12 h-12 rounded-2xl bg-emerald-500 group-hover:scale-105 transition flex items-center justify-center text-xl shadow-md">💼</div>
+                    <span class="text-[10px] font-bold">Schnelljob</span>
+                </button>
+                <button onclick="phoneCallMechanic()" class="flex flex-col items-center gap-1 group">
+                    <div class="w-12 h-12 rounded-2xl bg-amber-500 group-hover:scale-105 transition flex items-center justify-center text-xl shadow-md">🏎️</div>
+                    <span class="text-[10px] font-bold">Mechaniker</span>
+                </button>
+                <button onclick="phoneCallLester()" class="flex flex-col items-center gap-1 group">
+                    <div class="w-12 h-12 rounded-2xl bg-rose-500 group-hover:scale-105 transition flex items-center justify-center text-xl shadow-md">🕵️</div>
+                    <span class="text-[10px] font-bold">Lester ($500)</span>
+                </button>
+                <button onclick="phoneToggleSnapmatic()" class="flex flex-col items-center gap-1 group">
+                    <div class="w-12 h-12 rounded-2xl bg-cyan-500 group-hover:scale-105 transition flex items-center justify-center text-xl shadow-md">📸</div>
+                    <span class="text-[10px] font-bold">Snapmatic</span>
+                </button>
+                <button onclick="phoneRefillArmor()" class="flex flex-col items-center gap-1 group">
+                    <div class="w-12 h-12 rounded-2xl bg-blue-600 group-hover:scale-105 transition flex items-center justify-center text-xl shadow-md">🛡️</div>
+                    <span class="text-[10px] font-bold">Panzerung</span>
+                </button>
+                <button onclick="toggleIFruitPhone(false)" class="flex flex-col items-center gap-1 group">
+                    <div class="w-12 h-12 rounded-2xl bg-slate-800 group-hover:scale-105 transition flex items-center justify-center text-xl shadow-md">✕</div>
+                    <span class="text-[10px] font-bold">Schließen</span>
+                </button>
+            </div>
+        </div>
+        <button onclick="toggleIFruitPhone(false)" class="w-8 h-8 rounded-full border-2 border-slate-600 mx-auto mt-2.5 block hover:bg-slate-800"></button>
+    </div>
+
+    <!-- GTA 5 WAFFENRAD (Taste Tab) -->
+    <div id="weaponWheelOverlay" class="fixed inset-0 bg-black/65 backdrop-blur-sm flex items-center justify-center z-30 hidden">
+        <div class="relative w-80 h-80 md:w-96 md:h-96 rounded-full border-4 border-white/15 bg-slate-950/90 flex items-center justify-center shadow-2xl">
+            <div class="text-center pointer-events-none px-6">
+                <div id="wheelSelectedName" class="gta-street text-2xl uppercase font-bold text-white">Faust</div>
+                <div id="wheelSelectedAmmo" class="text-xs text-amber-400 font-bold mb-2">Unbegrenzt</div>
+                <div class="space-y-1 text-[9px] uppercase text-gray-400 text-left w-32 mx-auto">
+                    <div>Schaden <div class="h-1 bg-white/15 rounded"><div id="statDamage" class="h-full bg-white" style="width:30%"></div></div></div>
+                    <div>Feuerrate <div class="h-1 bg-white/15 rounded"><div id="statRate" class="h-full bg-white" style="width:50%"></div></div></div>
+                    <div>Reichweite <div class="h-1 bg-white/15 rounded"><div id="statRange" class="h-full bg-white" style="width:20%"></div></div></div>
+                </div>
+            </div>
+            <div id="weaponWheelSlots" class="absolute inset-0"></div>
+        </div>
+    </div>
+
+    <!-- GTA 5 CHARAKTERRAD (Taste C) -->
+    <div id="charWheelOverlay" class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-30 hidden">
+        <div class="relative w-80 h-80 md:w-96 md:h-96 rounded-full border-4 border-white/20 bg-slate-950/90 flex items-center justify-center shadow-2xl">
+            <div class="text-center pointer-events-none px-4">
+                <div class="text-[10px] uppercase tracking-widest text-gray-400">Protagonist</div>
+                <div id="charWheelCenterName" class="gta-pricedown text-2xl text-white">MICHAEL</div>
+                <div id="charWheelCenterSpec" class="text-[10px] text-sky-400 font-semibold mt-0.5">Bullet-Time Fokus</div>
+            </div>
+
+            <button onclick="switchCharacter(1)" onmouseenter="previewCharWheel(1)" class="absolute top-3 left-1/2 -translate-x-1/2 w-24 h-24 rounded-full bg-emerald-950/90 hover:bg-emerald-600 border-2 border-emerald-400 flex flex-col items-center justify-center transition transform hover:scale-105 shadow-lg">
+                <span class="text-3xl">🧢</span>
+                <span class="gta-street text-xs font-bold text-white uppercase mt-0.5">Franklin</span>
+            </button>
+
+            <button onclick="switchCharacter(0)" onmouseenter="previewCharWheel(0)" class="absolute left-3 top-1/2 -translate-y-1/2 w-24 h-24 rounded-full bg-sky-950/90 hover:bg-sky-600 border-2 border-sky-400 flex flex-col items-center justify-center transition transform hover:scale-105 shadow-lg">
+                <span class="text-3xl">🕶️</span>
+                <span class="gta-street text-xs font-bold text-white uppercase mt-0.5">Michael</span>
+            </button>
+
+            <button onclick="switchCharacter(2)" onmouseenter="previewCharWheel(2)" class="absolute right-3 top-1/2 -translate-y-1/2 w-24 h-24 rounded-full bg-orange-950/90 hover:bg-orange-600 border-2 border-orange-400 flex flex-col items-center justify-center transition transform hover:scale-105 shadow-lg">
+                <span class="text-3xl">🔥</span>
+                <span class="gta-street text-xs font-bold text-white uppercase mt-0.5">Trevor</span>
+            </button>
+
+            <button onclick="closeCharWheel()" class="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-xs font-bold text-gray-300">
+                Abbrechen
+            </button>
+        </div>
+    </div>
+
+    <!-- AMMU-NATION & LS CUSTOMS SHOP MODAL -->
+    <div id="shopModal" class="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-40 hidden">
+        <div class="bg-slate-900 border border-white/20 rounded-3xl max-w-md w-full p-6 shadow-2xl">
+            <div class="flex justify-between items-center border-b border-white/10 pb-3 mb-4">
+                <div>
+                    <span id="shopSubtitle" class="text-[10px] uppercase tracking-widest text-amber-400 font-bold">Los Santos Shop</span>
+                    <h2 id="shopTitle" class="gta-pricedown text-3xl text-white">AMMU-NATION</h2>
+                </div>
+                <button onclick="closeShop()" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold">✕</button>
+            </div>
+            <div id="shopItems" class="space-y-2.5 mb-4"></div>
+            <button onclick="closeShop()" class="w-full py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-sm font-bold">Verlassen</button>
+        </div>
+    </div>
+
+    <!-- Start- / Pause-Menü Overlay -->
+    <div id="menuOverlay" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 z-50">
+        <div class="bg-slate-900/95 border border-white/15 rounded-3xl max-w-2xl w-full p-5 md:p-7 shadow-2xl max-h-[92vh] overflow-y-auto">
+            <div class="flex items-center justify-between border-b border-white/10 pb-4 mb-5">
+                <div>
+                    <span class="text-xs font-bold uppercase tracking-widest text-amber-400">Grand Theft Auto V Web-Edition</span>
+                    <h1 class="gta-pricedown text-4xl md:text-6xl text-white mt-0.5">LOS SANTOS <span class="text-emerald-400">V</span></h1>
+                </div>
+                <button id="soundToggleBtn" class="bg-white/10 hover:bg-white/20 px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition">
+                    <span id="soundIcon">🔊</span> <span id="soundText">Ton: AN</span>
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5 mb-5 text-sm">
+                <div class="bg-black/40 p-3.5 rounded-2xl border border-white/5">
+                    <h3 class="font-bold text-amber-400 uppercase text-xs tracking-wider mb-2">🚶 Protagonisten & Kampf</h3>
+                    <ul class="space-y-1.5 text-gray-300 text-xs">
+                        <li class="flex justify-between"><span>Bewegen / Sprint</span> <kbd class="bg-white/10 px-2 py-0.5 rounded font-mono text-white">W A S D / Shift</kbd></li>
+                        <li class="flex justify-between"><span>Schießen / Schlagen</span> <kbd class="bg-white/10 px-2 py-0.5 rounded font-mono text-white">Linksklick</kbd></li>
+                        <li class="flex justify-between"><span>GTA V Waffenrad</span> <kbd class="bg-white/10 px-2 py-0.5 rounded font-mono text-white">Tab / 1-5</kbd></li>
+                        <li class="flex justify-between"><span>Charakterrad (M / F / T)</span> <kbd class="bg-white/10 px-2 py-0.5 rounded font-mono text-white">C</kbd></li>
+                        <li class="flex justify-between"><span>Spezialfähigkeit / iFruit</span> <kbd class="bg-white/10 px-2 py-0.5 rounded font-mono text-white">Q / T</kbd></li>
+                    </ul>
+                </div>
+
+                <div class="bg-black/40 p-3.5 rounded-2xl border border-white/5">
+                    <h3 class="font-bold text-emerald-400 uppercase text-xs tracking-wider mb-2">🏎️ Fahrzeuge & Los Santos</h3>
+                    <ul class="space-y-1.5 text-gray-300 text-xs">
+                        <li class="flex justify-between"><span>Ein- / Aussteigen / Shop</span> <kbd class="bg-white/10 px-2 py-0.5 rounded font-mono text-white">E</kbd></li>
+                        <li class="flex justify-between"><span>Handbremse / Drift</span> <kbd class="bg-white/10 px-2 py-0.5 rounded font-mono text-white">Leertaste</kbd></li>
+                        <li class="flex justify-between"><span>Autoradio wechseln</span> <kbd class="bg-white/10 px-2 py-0.5 rounded font-mono text-white">R</kbd></li>
+                        <li class="flex justify-between"><span>Ammu-Nation / LS Customs</span> <kbd class="bg-white/10 px-2 py-0.5 rounded font-mono text-white">Rote & Blaue Marker</kbd></li>
+                        <li class="flex justify-between"><span>Vinewood & Del Perro Pier</span> <kbd class="bg-white/10 px-2 py-0.5 rounded font-mono text-white">Norden & Süden</kbd></li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-3">
+                <button id="startGameBtn" class="flex-1 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-extrabold py-3.5 px-6 rounded-2xl text-base uppercase tracking-wider shadow-lg shadow-emerald-500/20 transition transform active:scale-95">
+                    ▶ Story-Modus starten
+                </button>
+                <button id="spawnCarBtn" class="bg-white/10 hover:bg-white/20 text-white font-semibold py-3.5 px-5 rounded-2xl text-sm transition">
+                    🏎️ Supersportwagen rufen
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mobile Touch Controls -->
+    <div id="mobileJoystickZone" class="fixed bottom-4
